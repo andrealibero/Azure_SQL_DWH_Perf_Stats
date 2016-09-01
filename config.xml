@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<options> 
+   <option name="PerfStats">
+   	<action name="waits" title="Waits" output="Y" value="SELECT  w.[wait_id], w.[session_id], w.[type] AS Wait_type, w.[object_type], w.[object_name], w.[request_id], w.[request_time], w.[acquire_time], w.[state], w.[priority]	FROM sys.dm_pdw_waits w" />
+	<action name="resource_waits" title="Resource Waits" output="Y" value="SELECT [session_id], [type], [object_type], [object_name], [request_id], [request_time], [acquire_time], DATEDIFF(ms,[request_time],[acquire_time])  AS acquire_duration_ms, [concurrency_slots_used] AS concurrency_slots_reserved, [resource_class], [wait_id] AS queue_position FROM sys.dm_pdw_resource_waits" />
+	<action name="sessions_active" title="Active Sessions" output="Y" value="SELECT * FROM sys.dm_pdw_exec_sessions WHERE status IN ('Active','Idle') ORDER BY login_time DESC" />
+	<action name="queries_active" title="Active Queries" output="Y" value="SELECT * FROM sys.dm_pdw_exec_requests WHERE status IN ('Pending', 'Authorizing', 'AcquireSystemResources', 'Initializing', 'Plan', 'Parsing', 'AquireResources', 'Running', 'Cancelling') ORDER BY start_time DESC" />
+	<action name="request_steps_active" title="Active Request Steps" output="Y" value="select * from sys.dm_pdw_request_steps WHERE status IN ('Pending', 'Running','PendingCancel')" />	
+	<action name="sql_request_active" title="Active SQL Requests" output="Y" value="select * from sys.dm_pdw_sql_requests where status in ('ACTIVE','QUEUED') AND  spid &lt;&gt; @@SPID order by start_time desc" />		
+	<action name="workers_active" title="Active DMS Workers" output="Y" value="select * from sys.dm_pdw_dms_workers where status NOT IN ('StepComplete', 'StepError') order by start_time desc" />		
+	<action name="loader_backup_runs_active" title="Active Loader Backup Runs" output="Y" value="select * from sys.pdw_loader_backup_runs where status NOT IN ('COMPLETED', 'CANCELLED', 'FAILED') order by submit_time desc" />			
+	<action name="loader_backup_run_details_active" title="Active Loader Backup Run Details" output="Y" value="select * from sys.pdw_loader_backup_run_details where status not in ('COMPLETED','CANCELLED','FAILED') order by start_time desc" />			
+   </option>
+   	<option name="PerfStatsSnapshot">
+		<action name="nodes" title="Nodes" output="Y" value="select * from sys.dm_pdw_nodes" />
+		<action name="sysinfo" title="System Info" output="Y" value="select * from sys.dm_pdw_sys_info" />
+		<action name="data_skew1" title="Data Skew 1" output="N" value="IF OBJECT_ID('dbo.vDistributionSkew') IS NOT NULL
+BEGIN
+    DROP VIEW dbo.vDistributionSkew
+END" />
+		<action name="data_skew2" title="Data Skew 2" output="N" value="CREATE VIEW dbo.vDistributionSkew
+AS
+WITH base
+AS
+(
+SELECT 
+    SUBSTRING(@@version,34,4)                                                           AS  [build_number]
+,   GETDATE()                                                                           AS  [execution_time]
+,   DB_NAME()                                                                           AS  [database_name]
+,   s.name                                                                              AS  [schema_name]
+,   t.name                                                                              AS  [table_name]
+,   QUOTENAME(s.name)+'.'+QUOTENAME(t.name)                                             AS  [two_part_name]
+,   nt.[name]                                                                           AS  [node_table_name]
+,   ROW_NUMBER() OVER(PARTITION BY nt.[name] ORDER BY (SELECT NULL))                    AS  [node_table_name_seq]
+,   tp.[distribution_policy_desc]                                                       AS  [distribution_policy_name]
+,   nt.[distribution_id]                                                                AS  [distribution_id]
+,   nt.[pdw_node_id]                                                                    AS  [pdw_node_id]
+,   pn.[type]                                                                           AS  [pdw_node_type]
+,   pn.[name]                                                                           AS  [pdw_node_name]
+,   nps.[partition_number]                                                              AS  [partition_nmbr]
+,   nps.[reserved_page_count]                                                           AS  [reserved_space_page_count]
+,   nps.[reserved_page_count] - nps.[used_page_count]                                   AS  [unused_space_page_count]
+,   nps.[in_row_data_page_count] 
+    + nps.[row_overflow_used_page_count] + nps.[lob_used_page_count]                    AS  [data_space_page_count]
+,   nps.[reserved_page_count] 
+    - (nps.[reserved_page_count] - nps.[used_page_count]) 
+    - ([in_row_data_page_count]+[row_overflow_used_page_count]+[lob_used_page_count])   AS  [index_space_page_count]
+,   nps.[row_count]                                                                     AS  [row_count]
+from sys.schemas s
+join sys.tables t                               ON  s.[schema_id]           = t.[schema_id]
+join sys.pdw_table_distribution_properties  tp  ON  t.[object_id]           = tp.[object_id]
+join sys.pdw_table_mappings tm                  ON  t.[object_id]           = tm.[object_id]
+join sys.pdw_nodes_tables nt                    ON  tm.[physical_name]      = nt.[name]
+join sys.dm_pdw_nodes pn                        ON  nt.[pdw_node_id]        = pn.[pdw_node_id]
+join sys.dm_pdw_nodes_db_partition_stats nps    ON  nt.[object_id]          = nps.[object_id]
+                                                AND nt.[pdw_node_id]        = nps.[pdw_node_id]
+                                                AND nt.[distribution_id]    = nps.[distribution_id]
+)
+, size
+AS
+(
+SELECT  [build_number]
+,       [execution_time]
+,       [database_name]
+,       [schema_name]
+,       [table_name]
+,       [two_part_name]
+,       [node_table_name]
+,       [node_table_name_seq]
+,       [distribution_policy_name]
+,       [distribution_id]
+,       [pdw_node_id]
+,       [pdw_node_type]
+,       [pdw_node_name]
+,       [partition_nmbr]
+,       [reserved_space_page_count]
+,       [unused_space_page_count]
+,       [data_space_page_count]
+,       [index_space_page_count]
+,       [row_count]
+,       ([reserved_space_page_count] * 8.0)             AS [reserved_space_KB]
+,       ([reserved_space_page_count] * 8.0)/1000        AS [reserved_space_MB]
+,       ([reserved_space_page_count] * 8.0)/1000000     AS [reserved_space_GB]
+,       ([reserved_space_page_count] * 8.0)/1000000000  AS [reserved_space_TB]
+,       ([unused_space_page_count]   * 8.0)             AS [unused_space_KB]
+,       ([unused_space_page_count]   * 8.0)/1000        AS [unused_space_MB]
+,       ([unused_space_page_count]   * 8.0)/1000000     AS [unused_space_GB]
+,       ([unused_space_page_count]   * 8.0)/1000000000  AS [unused_space_TB]
+,       ([data_space_page_count]     * 8.0)             AS [data_space_KB]
+,       ([data_space_page_count]     * 8.0)/1000        AS [data_space_MB]
+,       ([data_space_page_count]     * 8.0)/1000000     AS [data_space_GB]
+,       ([data_space_page_count]     * 8.0)/1000000000  AS [data_space_TB]
+,       ([index_space_page_count]    * 8.0)             AS [index_space_KB]
+,       ([index_space_page_count]    * 8.0)/1000        AS [index_space_MB]
+,       ([index_space_page_count]    * 8.0)/1000000     AS [index_space_GB]
+,       ([index_space_page_count]    * 8.0)/1000000000  AS [index_space_TB]
+FROM    base
+)
+SELECT  * 
+FROM    size
+;" />
+
+		<action name="data_skew" title="Data Skew" output="Y" value="SELECT  [two_part_name]
+,		[distribution_policy_name]
+,       SUM([row_count]) AS [Total Row Count]
+,       CASE 
+			WHEN SUM([row_count]) &lt;= 0 THEN 0 
+			ELSE (MAX([row_count]) - MIN([row_count])) / SUM([row_count]) 
+		END AS [Skew Percentage]
+,       SUM([reserved_space_GB]) AS [reserved_space_GB]
+,       SUM([unused_space_GB]) AS [unused_space_GB]
+,       SUM([data_space_GB]) AS [data_space_GB]
+,       SUM([index_space_GB]) AS [index_space_GB]
+FROM    [dbo].[vDistributionSkew]
+GROUP BY two_part_name, distribution_policy_name
+ORDER BY [Skew Percentage] DESC
+" />	
+		<action name="waits" title="Waits" output="Y" value="SELECT  w.[wait_id], w.[session_id], w.[type] AS Wait_type, w.[object_type], w.[object_name], w.[request_id], w.[request_time], w.[acquire_time], w.[state], w.[priority]	FROM sys.dm_pdw_waits w" />
+		<action name="resource_waits" title="Resource Waits" output="Y" value="SELECT [session_id], [type], [object_type], [object_name], [request_id], [request_time], [acquire_time], DATEDIFF(ms,[request_time],[acquire_time])  AS acquire_duration_ms, [concurrency_slots_used] AS concurrency_slots_reserved, [resource_class], [wait_id] AS queue_position FROM sys.dm_pdw_resource_waits" />		
+		<action name="workload_roles" title="Workload Management Roles" output="Y" value="SELECT  r.name AS role_principal_name, m.name AS member_principal_name FROM sys.database_role_members rm JOIN sys.database_principals AS r ON rm.role_principal_id = r.principal_id JOIN sys.database_principals AS m ON rm.member_principal_id = m.principal_id WHERE r.name IN ('smallrc', 'mediumrc','largerc', 'xlargerc')" />		
+		<action name="column_store_row_groups" title="CCI Row Group Metadata" output="Y" value="SELECT
+        SUBSTRING(@@version,34,4)                                               AS [build_number]
+,       GETDATE()                                                               AS [execution_date]
+,       DB_Name()                                                               AS [database_name]
+,       t.name                                                                  AS [table_name]
+,       COUNT(DISTINCT rg.[partition_number])                                   AS [table_partition_count]
+,       SUM(rg.[total_rows])                                                    AS [row_count_total]
+,       SUM(rg.[total_rows])/COUNT(DISTINCT rg.[distribution_id])               AS [row_count_per_distribution_MAX]
+,       CEILING (   (SUM(rg.[total_rows])*1.0/COUNT(DISTINCT rg.[distribution_id])
+                        )/1048576
+                )                                                               AS [rowgroup_per_distribution_MAX]
+,       SUM(CASE WHEN rg.[State] = 1 THEN 1                   ELSE 0    END)    AS [OPEN_rowgroup_count]
+,       SUM(CASE WHEN rg.[State] = 1 THEN rg.[total_rows]     ELSE 0    END)    AS [OPEN_rowgroup_rows]
+,       MIN(CASE WHEN rg.[State] = 1 THEN rg.[total_rows]     ELSE NULL END)    AS [OPEN_rowgroup_rows_MIN]
+,       MAX(CASE WHEN rg.[State] = 1 THEN rg.[total_rows]     ELSE NULL END)    AS [OPEN_rowgroup_rows_MAX]
+,       AVG(CASE WHEN rg.[State] = 1 THEN rg.[total_rows]     ELSE NULL END)    AS [OPEN_rowgroup_rows_AVG]
+,       SUM(CASE WHEN rg.[State] = 2 THEN 1                   ELSE 0    END)    AS [CLOSED_rowgroup_count]
+,       SUM(CASE WHEN rg.[State] = 2 THEN rg.[total_rows]     ELSE 0    END)    AS [CLOSED_rowgroup_rows]
+,       MIN(CASE WHEN rg.[State] = 2 THEN rg.[total_rows]     ELSE NULL END)    AS [CLOSED_rowgroup_rows_MIN]
+,       MAX(CASE WHEN rg.[State] = 2 THEN rg.[total_rows]     ELSE NULL END)    AS [CLOSED_rowgroup_rows_MAX]
+,       AVG(CASE WHEN rg.[State] = 2 THEN rg.[total_rows]     ELSE NULL END)    AS [CLOSED_rowgroup_rows_AVG]
+,       SUM(CASE WHEN rg.[State] = 3 THEN 1                   ELSE 0    END)    AS [COMPRESSED_rowgroup_count]
+,       SUM(CASE WHEN rg.[State] = 3 THEN rg.[total_rows]     ELSE 0    END)    AS [COMPRESSED_rowgroup_rows]
+,       SUM(CASE WHEN rg.[State] = 3 THEN rg.[deleted_rows]   ELSE 0    END)    AS [COMPRESSED_rowgroup_rows_DELETED]
+,       MIN(CASE WHEN rg.[State] = 3 THEN rg.[total_rows]     ELSE NULL END)    AS [COMPRESSED_rowgroup_rows_MIN]
+,       MAX(CASE WHEN rg.[State] = 3 THEN rg.[total_rows]     ELSE NULL END)    AS [COMPRESSED_rowgroup_rows_MAX]
+,       AVG(CASE WHEN rg.[State] = 3 THEN rg.[total_rows]     ELSE NULL END)    AS [COMPRESSED_rowgroup_rows_AVG]
+FROM    sys.[pdw_nodes_column_store_row_groups] rg
+JOIN    sys.[pdw_nodes_tables] nt                   ON  rg.[object_id]          = nt.[object_id]
+                                                    AND rg.[pdw_node_id]        = nt.[pdw_node_id]
+                                                    AND rg.[distribution_id]    = nt.[distribution_id]
+JOIN    sys.[pdw_table_mappings] mp                 ON  nt.[name]               = mp.[physical_name]
+JOIN    sys.[tables] t                              ON  mp.[object_id]          = t.[object_id]
+GROUP BY
+        t.[name]
+" />	
+		<action name="STATS_DATE" title="Statistics" output="Y" value="SELECT sm.[name] AS [schema_name] , tb.[name] AS [table_name] , st.[name] AS [stats_name] , st.[filter_definition] AS [stats_filter_defiinition] , st.[has_filter] AS [stats_is_filtered] , STATS_DATE(st.[object_id],st.[stats_id]) AS [stats_last_updated_date] , co.[name] AS [stats_column_name] , ty.[name] AS [column_type] , co.[max_length] AS [column_max_length] , co.[precision] AS [column_precision] , co.[scale] AS [column_scale] , co.[is_nullable] AS [column_is_nullable] , co.[collation_name] AS [column_collation_name] , QUOTENAME(sm.[name])+'.'+QUOTENAME(tb.[name]) AS two_part_name , QUOTENAME(DB_NAME())+'.'+QUOTENAME(sm.[name])+'.'+QUOTENAME(tb.[name]) AS three_part_name FROM sys.objects AS ob JOIN sys.stats AS st ON ob.[object_id] = st.[object_id] JOIN sys.stats_columns AS sc ON st.[stats_id] = sc.[stats_id] AND st.[object_id] = sc.[object_id] JOIN sys.columns AS co ON sc.[column_id] = co.[column_id] AND sc.[object_id] = co.[object_id] JOIN sys.types AS ty ON co.[user_type_id] = ty.[user_type_id] JOIN sys.tables AS tb ON co.[object_id] = tb.[object_id] JOIN sys.schemas AS sm ON tb.[schema_id] = sm.[schema_id] WHERE 1=1 AND st.[user_created] = 1"/>	
+		<action name="sessions" title="Sessions" output="Y" value="SELECT * FROM sys.dm_pdw_exec_sessions ORDER BY login_time DESC" />
+		<action name="queries" title="Queries" output="Y" value="SELECT * FROM sys.dm_pdw_exec_requests ORDER BY start_time DESC" />
+		<action name="request_steps" title="Request Steps" output="Y" value="select * from sys.dm_pdw_request_steps order by start_time desc" />	
+		<action name="sql_request" title="SQL Requests" output="Y" value="select * from sys.dm_pdw_sql_requests order by start_time desc" />		
+		<action name="workers" title="DMS Workers" output="Y" value="select * from sys.dm_pdw_dms_workers order by start_time desc" />			
+		<action name="loader_backup_runs" title="Loader Backup Runs" output="Y" value="SELECT * FROM sys.pdw_loader_backup_runs order by submit_time desc" />			
+		<action name="loader_backup_run_details" title="Loader Backup Run Details" output="Y" value="SELECT * FROM sys.pdw_loader_backup_run_details order by start_time desc" />			  
+		<action name="errors" title="Errors" output="Y" value="SELECT * FROM sys.dm_pdw_errors order by create_time desc" />		
+		<action name="wait_stats" title="Wait Stats" output="Y" value="SELECT  w.[pdw_node_id], w.[wait_name], w.[max_wait_time], w.[request_count], w.[signal_time], w.[completed_count], w.[wait_time] FROM sys.dm_pdw_wait_stats w" />		
+	</option>
+	<option name="Server">
+		<action name="sys.database_service_objectives" title="sys.database_service_objectives" output="Y" value="SELECT db.name [Database], ds.edition [Edition], ds.service_objective [Service Objective] FROM sys.database_service_objectives ds JOIN sys.databases db ON ds.database_id = db.database_id" />
+    <action name="sys.dm_operation_status" title="sys.dm_operation_status" output="Y" value="SELECT * FROM sys.dm_operation_status WHERE resource_type_desc = 'Database' ORDER BY start_time DESC" />
+  </option>  
+</options>
