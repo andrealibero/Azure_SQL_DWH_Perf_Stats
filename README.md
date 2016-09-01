@@ -21,7 +21,13 @@ The tool doesn't have any setup. Just make sure you download the following files
 In order to run the script, you need:
   - Azure SQL DW server name (format: <server_name>.database.windows.net)
   - Azure SQL DW database name
-  - Username and password 
+  - Username and password (the user must have db_owner role)
+
+To create AAD user and add to db_owner role:  
+```sh
+CREATE USER [user@domain.com] FROM EXTERNAL PROVIDER;
+EXEC sp_addrolemember 'db_owner', 'user@domain.com';
+ ```
   
 ### SYNTAX
 
