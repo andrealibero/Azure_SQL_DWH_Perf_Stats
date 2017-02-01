@@ -113,7 +113,8 @@ PS c:\Azure_SQL_DWH_Perf_Stats> .\Azure_SQL_DWH_Perf_Stats.ps1 server_name.datab
  By adding the AADAuth switch, you can take advantage of the Azure Active Directory Password authentication method. 
  
  > AAD Auth requires SQLServer PowerShell module, available from SQL Server Management Studio 2016 July 2016 release on. refer to [SQL Server blog](https://blogs.technet.microsoft.com/dataplatforminsider/2016/06/30/sql-powershell-july-2016-update/) for further details.
- 
- 
- 
+
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
+contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
  
