@@ -164,8 +164,9 @@ GROUP BY
 		<action name="loader_backup_runs" title="Loader Backup Runs" output="Y" value="SELECT * FROM sys.pdw_loader_backup_runs order by submit_time desc" />			
 		<action name="loader_backup_run_details" title="Loader Backup Run Details" output="Y" value="SELECT * FROM sys.pdw_loader_backup_run_details order by start_time desc" />			  
 		<action name="errors" title="Errors" output="Y" value="SELECT * FROM sys.dm_pdw_errors order by create_time desc" />		
-		<action name="wait_stats" title="Wait Stats" output="Y" value="SELECT  w.[pdw_node_id], w.[wait_name], w.[max_wait_time], w.[request_count], w.[signal_time], w.[completed_count], w.[wait_time] FROM sys.dm_pdw_wait_stats w" />		
-	</option>
+		<action name="wait_stats" title="Wait Stats" output="Y" value="SELECT  w.[pdw_node_id], w.[wait_name], w.[max_wait_time], w.[request_count], w.[signal_time], w.[completed_count], w.[wait_time] FROM sys.dm_pdw_wait_stats w" />
+    <action name="tempdb_file_size" title="Tempdb file size" output="Y" value="SELECT t.cntr_value*1.0/1048576 as tempdb_size_GB, t.pdw_node_id, nod.[type] FROM sys.dm_pdw_nodes_os_performance_counters t JOIN sys.dm_pdw_nodes nod ON t.pdw_node_id = nod.pdw_node_id WHERE t.instance_name = 'tempdb' and t.counter_name = 'Data File(s) Size (KB)'" />
+    </option>
 	<option name="Server">
 		<action name="sys.database_service_objectives" title="sys.database_service_objectives" output="Y" value="SELECT db.name [Database], ds.edition [Edition], ds.service_objective [Service Objective] FROM sys.database_service_objectives ds JOIN sys.databases db ON ds.database_id = db.database_id" />
     <action name="sys.dm_operation_status" title="sys.dm_operation_status" output="Y" value="SELECT * FROM sys.dm_operation_status WHERE resource_type_desc = 'Database' ORDER BY start_time DESC" />
